@@ -1,0 +1,19 @@
+/*
+ * flash_store_data.h
+ *
+ *  Created on: Jan 29, 2024
+ *      Author: aleja
+ */
+
+#ifndef INC_FLASH_STORE_DATA_H_
+#define INC_FLASH_STORE_DATA_H_
+
+/*This function receives as arguments
+ * Initial memory address of WHERE we want to write
+ * A pointer to the data structure of WHAT we want to write
+ * The lengt of data (Number of words)
+*/
+void store_flash_memory();
+void read_flash_memory();
+
+#endif /* INC_FLASH_STORE_DATA_H_ */

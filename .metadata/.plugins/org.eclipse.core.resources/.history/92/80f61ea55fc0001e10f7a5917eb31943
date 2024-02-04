@@ -1,0 +1,684 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2024 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+//Struct which is going to store calibration data.
+typedef struct Sensors_calibration_t {
+  uint32_t modified;
+  uint32_t steering_correction_factor;
+  uint32_t damper_left_correction_factor;
+  uint32_t damper_right_correction_factor;
+  uint16_t min_steering;
+  uint16_t max_steering;
+  uint16_t min_damper_left;
+  uint16_t max_damper_left;
+  uint16_t min_damper_right;
+  uint16_t max_damper_right;
+
+} Sensors_calibration_t;
+//Struct which is going to store enable "signals".
+typedef struct Calibration_config_t {
+  uint8_t enable_calib_steering;
+  uint8_t enable_calib_damper_left;
+  uint8_t enable_calib_damper_right;
+} Calibration_config_t;
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+//CAN ID´s (look up in SMS).
+#define FLASH_LAST_PAGE 0x0800FC00
+#define CAN_ID_0 0x0B0
+//#define CAN_ID_1 0x0B1
+#define CAN_ID_2 0x0B2
+//Physical constant values.
+//Which physical values should we use?
+#define MAX_STEERING 0x0031
+#define MIN_STEERING 0
+#define MAX_DAMPER_MM 0x0031
+#define MIN_DAMPER_MM 0
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+DMA_HandleTypeDef hdma_adc;
+
+CAN_HandleTypeDef hcan;
+
+TIM_HandleTypeDef htim14;
+
+/* USER CODE BEGIN PV */
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
+static void MX_ADC_Init(void);
+static void MX_CAN_Init(void);
+static void MX_TIM14_Init(void);
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+//Volatile variables that are used in calibration
+volatile uint8_t enter_calibration_mode = 0;
+volatile uint8_t abort_calibration = 0;
+
+//We create an instance of defined Structs
+Calibration_config_t calibration_config;
+Sensors_calibration_t sensors_calibration = {
+		.modified = 0,
+		.min_steering = 0,
+		.max_steering = 0xFFFF,
+		.steering_correction_factor = 0x00000001,
+		.min_damper_left = 0,
+		.max_damper_left = 0xFFFF,
+		.damper_left_correction_factor = 0x00000001,
+		.min_damper_right = 0,
+		.max_damper_right = 0xFFFF,
+		.damper_right_correction_factor = 0x00000001
+};
+
+uint32_t TxMailBox;
+
+//We define Header for trace 0x0B0
+CAN_TxHeaderTypeDef TxHeader_Steering_Brake = {
+	.DLC = 4,
+	.ExtId = 0,
+ 	.IDE = CAN_ID_STD,
+	.RTR = CAN_RTR_DATA,
+	.StdId = CAN_ID_0,
+ 	.TransmitGlobalTime = DISABLE
+};
+//We define Header for trace 0x0B2
+CAN_TxHeaderTypeDef TxHeader_Dampers = {
+	.DLC = 4,
+	.ExtId = 0,
+ 	.IDE = CAN_ID_STD,
+	.RTR = CAN_RTR_DATA,
+	.StdId = CAN_ID_2,
+ 	.TransmitGlobalTime = DISABLE
+};
+
+uint8_t send;
+uint16_t transformedData;
+
+//We define Header for received traces
+CAN_RxHeaderTypeDef RxHeader;
+
+//Create buffer where converted values from ADC are stored.
+uint16_t adc_buffer[4];
+uint16_t auxData[4];
+
+//Create buffer to receive data from a CAN TRACE (in this code it is used to receive CANSEND "commands").
+uint8_t RxData[8];
+
+//Create buffer to send data to CANBUS.
+uint8_t TxData_Steering_Brake[4];
+uint8_t TxData_Dampers[4];
+
+void calibrate_sensors(Calibration_config_t* calib_config, Sensors_calibration_t* calib_struct) {
+
+  uint16_t temp_min_steering = 0XFFFF, temp_min_left_damper = 0XFFFF, temp_min_right_damper = 0XFFFF;
+  uint16_t temp_max_left_damper = 0, temp_max_right_damper = 0, temp_max_steering = 0;
+
+  while (enter_calibration_mode) {
+
+    if (calib_config->enable_calib_damper_left) {
+      if (adc_buffer[0] > temp_max_left_damper) temp_max_left_damper = adc_buffer[0];
+      if (adc_buffer[0] < temp_min_left_damper) temp_min_left_damper = adc_buffer[0];
+    }
+
+    if (calib_config->enable_calib_damper_right) {
+      if (adc_buffer[1] > temp_max_right_damper) temp_max_right_damper = adc_buffer[1];
+      if (adc_buffer[1] < temp_min_right_damper) temp_min_right_damper = adc_buffer[1];
+    }
+
+    if (calib_config->enable_calib_steering) {
+      if (adc_buffer[2] > temp_max_steering) temp_max_steering = adc_buffer[2];
+      if (adc_buffer[2] < temp_min_steering) temp_min_steering = adc_buffer[2];
+    }
+  }
+
+  if (!abort_calibration) {
+    if (calib_config->enable_calib_steering) {
+	  calib_config->enable_calib_steering = 0;
+      calib_struct->min_steering = temp_min_steering;
+      calib_struct->max_steering = temp_max_steering;
+      calib_struct->steering_correction_factor = (((uint32_t) (MAX_STEERING - MIN_STEERING)) << 12) / (uint32_t)(temp_max_steering - temp_min_steering);
+    }
+    if (calib_config->enable_calib_damper_left) {
+      calib_struct->min_damper_left = temp_min_left_damper;
+      calib_struct->max_damper_left = temp_max_left_damper;
+      calib_struct->damper_left_correction_factor = (((uint32_t)(MAX_DAMPER_MM - MIN_DAMPER_MM)) << 12) / (uint32_t)(temp_max_left_damper - temp_min_left_damper);
+      calib_config->enable_calib_damper_left = 0;
+    }
+    if (calib_config->enable_calib_damper_right) {
+      calib_struct->min_damper_right = temp_min_right_damper;
+      calib_struct->max_damper_right = temp_max_right_damper;
+      calib_struct->damper_right_correction_factor = (((uint32_t)(MAX_DAMPER_MM - MIN_DAMPER_MM)) << 12) / (uint32_t)(temp_max_right_damper - temp_min_right_damper);
+      calib_config->enable_calib_damper_right = 0;
+    }
+
+    calib_struct->modified = 1;
+    if(store_flash_memory(FLASH_LAST_PAGE, &calib_struct, sizeof(calib_struct)/4) == 0)
+    {
+    	HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_SET);
+    	HAL_Delay(1000);
+    	HAL_GPIO_WritePin(GPIOB, LED_Pin, GPIO_PIN_RESET);
+    }
+  }
+}
+
+static inline uint16_t linearTransformation(uint16_t raw_data, uint16_t min_raw_data, uint16_t min_real_value, uint32_t correction_factor)
+{
+	return (((raw_data - min_raw_data)*correction_factor >> 12))+ min_real_value;
+}
+
+uint32_t store_flash_memory(uint32_t memory_address, Sensors_calibration_t*data, uint32_t number_words)
+{
+	//We declare some useful variables
+	static FLASH_EraseInitTypeDef Erase_Init_Struct;
+	uint32_t PAGEError;
+	int n = 0;
+
+	//We unlock the memory in order to write
+	HAL_FLASH_Unlock();
+
+	//Erase the USER FLASH area
+	uint32_t start_page = GetPage(memory_address);
+	uint32_t end_page_address = start_page - number_words*4;
+	uint32_t end_page = GetPage(end_page_address);
+
+	Erase_Init_Struct.NbPages = ((end_page - start_page)/FLASH_PAGE_SIZE) + 1;
+	Erase_Init_Struct.PageAddress = start_page;
+	Erase_Init_Struct.TypeErase = FLASH_TYPEERASE_PAGES;
+
+	if(HAL_FLASHEx_Erase(&Erase_Init_Struct, &PageError) != HAL_OK)
+	{
+		return HAL_FLASH_GetError(); //We return if there is an error while erasing
+	}
+
+	//We create some useful pointers to access struct data
+	uint32_t * px = (uint32_t *)data;
+	uint16_t * gx = (uint16_t *)data;
+
+	//We write data into FLASH
+	for(n=0; n<number_words; n++)
+	{
+		if(n < 4)
+		{
+			if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, memory_address, *(px + i)) != HAL_OK)
+					{
+						return HAL_FLASH_GetError ();
+					}
+		} else
+		{
+			if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, memory_address, *(gx + i)) != HAL_OK)
+					{
+						return HAL_FLASH_GetError ();
+					}
+		}
+		memory_address += 4;
+	}
+
+	//We lock the memory to prevent writing
+	HAL_FLASH_Lock();
+
+	return 0;
+};
+
+void read_flash_memory(int32_t memory_address, Sensors_calibration_t*data, uint32_t number_words)
+{
+	int n;
+	for(n=0; n<number_words; n++)
+		{
+			if(n < 4){
+				*(data+i) = *(__IO uint32_t *)memory_address;
+			} else {
+				*(data+i) = *(__IO uint16_t *)memory_address;
+			}
+			memory_address -= 4;
+		}
+}
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+	send = 0;
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_ADC_Init();
+  MX_CAN_Init();
+  MX_TIM14_Init();
+  /* USER CODE BEGIN 2 */
+  //We initialize some services with its interruptions.
+  HAL_TIM_Base_Start_IT(&htim14);
+
+  HAL_ADC_Start_DMA(&hadc, (uint32_t *) adc_buffer, 4);
+  HAL_ADC_Start_IT(&hadc);
+
+  HAL_CAN_Start(&hcan);
+  HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING);
+
+  //We read from memory if the struct is modified
+  if(sensors_calibration.modified != 0)
+  {
+	  read_flash_memory(FLASH_LAST_PAGE, &sensors_calibration, sizeof(sensors_calibration)/4);
+  }
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+	 if (enter_calibration_mode) calibrate_sensors(&calibration_config, &sensors_calibration);
+	 if(send==1)
+	 {
+		//We reset "send" byte.
+	  	send = 0;
+
+	  	//We transfer data to the associated vector
+	  	TxData_Dampers[0] = auxData[0];
+	  	TxData_Dampers[1] = auxData[0] >> 8;
+	  	TxData_Dampers[2] = auxData[1];
+	  	TxData_Dampers[3] = auxData[1] >> 8;
+
+	  	TxData_Steering_Brake[0] = auxData[2];
+	  	TxData_Steering_Brake[1] = auxData[2] >> 8;
+	  	TxData_Steering_Brake[2] = auxData[3];
+	  	TxData_Steering_Brake[3] = auxData[3] >> 8;
+
+	    HAL_CAN_AddTxMessage(&hcan, &TxHeader_Dampers, TxData_Dampers, &TxMailBox);
+	  	HAL_CAN_AddTxMessage(&hcan, &TxHeader_Steering_Brake, TxData_Steering_Brake, &TxMailBox);
+
+	  	HAL_GPIO_TogglePin(GPIOB, LED_Pin);
+	    //We toggle the Led in order to check physically if the node is sending data.
+		//HAL_GPIO_WritePin(GPIOB,LED_Pin, GPIO_PIN_RESET);
+	    //HAL_GPIO_TogglePin(GPIOB, LED_Pin);
+	 }
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI14|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
+  RCC_OscInitStruct.HSI14CalibrationValue = 16;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC_Init(void)
+{
+
+  /* USER CODE BEGIN ADC_Init 0 */
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.ContinuousConvMode = ENABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests = ENABLE;
+  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel to be converted.
+  */
+  sConfig.Channel = ADC_CHANNEL_7;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+  /* USER CODE END ADC_Init 2 */
+
+}
+
+/**
+  * @brief CAN Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN_Init(void)
+{
+
+  /* USER CODE BEGIN CAN_Init 0 */
+
+  /* USER CODE END CAN_Init 0 */
+
+  /* USER CODE BEGIN CAN_Init 1 */
+
+  /* USER CODE END CAN_Init 1 */
+  hcan.Instance = CAN;
+  hcan.Init.Prescaler = 3;
+  hcan.Init.Mode = CAN_MODE_NORMAL;
+  hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
+  hcan.Init.TimeTriggeredMode = DISABLE;
+  hcan.Init.AutoBusOff = DISABLE;
+  hcan.Init.AutoWakeUp = DISABLE;
+  hcan.Init.AutoRetransmission = DISABLE;
+  hcan.Init.ReceiveFifoLocked = DISABLE;
+  hcan.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN_Init 2 */
+  CAN_FilterTypeDef canfilterconfig;
+
+  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
+  canfilterconfig.FilterBank = 10;
+  canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+  canfilterconfig.FilterIdHigh = 0x0F0<<5;
+  canfilterconfig.FilterIdLow = 0x0000;
+  canfilterconfig.FilterMaskIdHigh = 0x0F0<<5;
+  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  canfilterconfig.SlaveStartFilterBank = 0;
+
+  HAL_CAN_ConfigFilter(&hcan, &canfilterconfig);
+  /* USER CODE END CAN_Init 2 */
+
+}
+
+/**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 48000 - 1;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 200 - 1;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+
+/* USER CODE BEGIN 4 */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+	auxData[0] = linearTransformation((uint16_t) adc_buffer[0], sensors_calibration.min_damper_left, MIN_DAMPER_MM, sensors_calibration.damper_left_correction_factor);
+	auxData[1] = linearTransformation((uint16_t)adc_buffer[1], sensors_calibration.min_damper_right, MIN_DAMPER_MM, sensors_calibration.damper_right_correction_factor);
+	auxData[2] = linearTransformation((uint16_t)adc_buffer[2], sensors_calibration.min_steering, MIN_STEERING, sensors_calibration.steering_correction_factor);
+	auxData[3] = (uint16_t)adc_buffer[3];
+}
+//We use this interruption to "say" when we want to send data to CANBUS.
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim->Instance == TIM14){
+		send = 1;
+	}
+}
+//We use this interruption to handle commands that are received from CAN.
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan) {
+
+  if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK) {
+    /* Reception Error */
+    Error_Handler();
+  }
+
+  switch (RxData[0]) {
+
+  case 0xAA: // start calibration command
+    enter_calibration_mode = 1;
+    abort_calibration = 0;
+    calibration_config.enable_calib_steering = RxData[1] == 0xAA ? 1 : 0;
+    calibration_config.enable_calib_damper_left = RxData[2] == 0xAA ? 1 : 0;
+    calibration_config.enable_calib_damper_right = RxData[3] == 0xAA ? 1 : 0;
+    break;
+
+  case 0xAB: // end calibration command
+    enter_calibration_mode = 0;
+    abort_calibration = 0;
+    break;
+
+  case 0xAC: // abort calibration command
+    enter_calibration_mode = 0;
+    abort_calibration = 1;
+    calibration_config.enable_calib_steering = 0;
+    calibration_config.enable_calib_damper_left = 0;
+    calibration_config.enable_calib_damper_right = 0;
+    break;
+    // add more commands here if needed
+  }
+}
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef  USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

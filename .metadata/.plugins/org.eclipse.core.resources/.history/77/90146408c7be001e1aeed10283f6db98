@@ -1,0 +1,13 @@
+/*
+ * flash_store_data.h
+ *
+ *  Created on: Jan 29, 2024
+ *      Author: aleja
+ */
+
+#ifndef INC_FLASH_STORE_DATA_H_
+#define INC_FLASH_STORE_DATA_H_
+
+
+
+#endif /* INC_FLASH_STORE_DATA_H_ */
