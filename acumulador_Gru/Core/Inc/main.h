@@ -61,8 +61,8 @@ void Error_Handler(void);
 #define ADC_1_GPIO_Port GPIOA
 #define ADC_2_Pin GPIO_PIN_1
 #define ADC_2_GPIO_Port GPIOA
-#define PIN_C_Pin GPIO_PIN_2
-#define PIN_C_GPIO_Port GPIOA
+#define C_Pin GPIO_PIN_1
+#define C_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

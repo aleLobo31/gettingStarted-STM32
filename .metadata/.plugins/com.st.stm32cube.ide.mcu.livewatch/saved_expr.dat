@@ -5,3 +5,4 @@ sensors_calibration
 calibration_config
 enter_calibration_mode
 send
+sensors_calibration_read

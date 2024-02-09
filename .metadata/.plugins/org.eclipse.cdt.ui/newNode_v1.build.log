@@ -1,10 +1,10 @@
-18:04:54 **** Incremental Build of configuration Debug for project newNode_v1 ****
+16:08:13 **** Incremental Build of configuration Debug for project newNode_v1 ****
 make -j12 all 
 arm-none-eabi-size  newNode_v1.elf 
    text	   data	    bss	    dec	    hex	filename
-  16236	     72	   1920	  18228	   4734	newNode_v1.elf
+  15136	     92	   1892	  17120	   42e0	newNode_v1.elf
 Finished building: default.size.stdout
  
 
-18:04:54 Build Finished. 0 errors, 0 warnings. (took 262ms)
+16:08:14 Build Finished. 0 errors, 0 warnings. (took 356ms)
 

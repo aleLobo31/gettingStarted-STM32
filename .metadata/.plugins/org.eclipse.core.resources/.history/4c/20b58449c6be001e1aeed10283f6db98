@@ -1,4 +1,0 @@
-#ifndef FLASH_STORE_DATA_H_
-#define FLASH_STORE_DATA_H_
-
-void store_flash

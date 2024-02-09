@@ -1,61 +1,10 @@
-00:07:49 **** Incremental Build of configuration Debug for project acumulador_Gru ****
+16:08:12 **** Incremental Build of configuration Debug for project acumulador_Gru ****
 make -j12 all 
-arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m0 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F042x6 -c -I../Core/Inc -I../Drivers/STM32F0xx_HAL_Driver/Inc -I../Drivers/STM32F0xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F0xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfloat-abi=soft -mthumb -o "Core/Src/main.o"
-../Core/Src/main.c: In function 'main':
-../Core/Src/main.c:141:36: error: 'PIN_C' undeclared (first use in this function)
-  141 |         if(HAL_GPIO_ReadPin(GPIOA, PIN_C) == 0){
-      |                                    ^~~~~
-../Core/Src/main.c:141:36: note: each undeclared identifier is reported only once for each function it appears in
-../Core/Src/main.c:163:45: error: incompatible type for argument 2 of 'HAL_CAN_AddTxMessage'
-  163 |                 HAL_CAN_AddTxMessage(&hcan, transmit_key, TxData_key, &TxMailBox);
-      |                                             ^~~~~~~~~~~~
-      |                                             |
-      |                                             CAN_TxHeaderTypeDef
-In file included from ../Core/Inc/stm32f0xx_hal_conf.h:217,
-                 from ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal.h:29,
-                 from ../Core/Inc/main.h:30,
-                 from ../Core/Src/main.c:20:
-../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_can.h:679:92: note: expected 'const CAN_TxHeaderTypeDef *' but argument is of type 'CAN_TxHeaderTypeDef'
-  679 | HAL_StatusTypeDef HAL_CAN_AddTxMessage(CAN_HandleTypeDef *hcan, const CAN_TxHeaderTypeDef *pHeader,
-      |                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~
-../Core/Src/main.c:163:71: warning: passing argument 4 of 'HAL_CAN_AddTxMessage' from incompatible pointer type [-Wincompatible-pointer-types]
-  163 |                 HAL_CAN_AddTxMessage(&hcan, transmit_key, TxData_key, &TxMailBox);
-      |                                                                       ^~~~~~~~~~
-      |                                                                       |
-      |                                                                       CAN_TxMailBox_TypeDef *
-In file included from ../Core/Inc/stm32f0xx_hal_conf.h:217,
-                 from ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal.h:29,
-                 from ../Core/Inc/main.h:30,
-                 from ../Core/Src/main.c:20:
-../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_can.h:680:73: note: expected 'uint32_t *' {aka 'long unsigned int *'} but argument is of type 'CAN_TxMailBox_TypeDef *'
-  680 |                                        const uint8_t aData[], uint32_t *pTxMailbox);
-      |                                                               ~~~~~~~~~~^~~~~~~~~~
-../Core/Src/main.c:164:45: error: incompatible type for argument 2 of 'HAL_CAN_AddTxMessage'
-  164 |                 HAL_CAN_AddTxMessage(&hcan, transmit_time, TxData_time, &TxMailBox);
-      |                                             ^~~~~~~~~~~~~
-      |                                             |
-      |                                             CAN_TxHeaderTypeDef
-In file included from ../Core/Inc/stm32f0xx_hal_conf.h:217,
-                 from ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal.h:29,
-                 from ../Core/Inc/main.h:30,
-                 from ../Core/Src/main.c:20:
-../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_can.h:679:92: note: expected 'const CAN_TxHeaderTypeDef *' but argument is of type 'CAN_TxHeaderTypeDef'
-  679 | HAL_StatusTypeDef HAL_CAN_AddTxMessage(CAN_HandleTypeDef *hcan, const CAN_TxHeaderTypeDef *pHeader,
-      |                                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~
-../Core/Src/main.c:164:73: warning: passing argument 4 of 'HAL_CAN_AddTxMessage' from incompatible pointer type [-Wincompatible-pointer-types]
-  164 |                 HAL_CAN_AddTxMessage(&hcan, transmit_time, TxData_time, &TxMailBox);
-      |                                                                         ^~~~~~~~~~
-      |                                                                         |
-      |                                                                         CAN_TxMailBox_TypeDef *
-In file included from ../Core/Inc/stm32f0xx_hal_conf.h:217,
-                 from ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal.h:29,
-                 from ../Core/Inc/main.h:30,
-                 from ../Core/Src/main.c:20:
-../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_can.h:680:73: note: expected 'uint32_t *' {aka 'long unsigned int *'} but argument is of type 'CAN_TxMailBox_TypeDef *'
-  680 |                                        const uint8_t aData[], uint32_t *pTxMailbox);
-      |                                                               ~~~~~~~~~~^~~~~~~~~~
-make: *** [Core/Src/subdir.mk:34: Core/Src/main.o] Error 1
-"make -j12 all" terminated with exit code 2. Build might be incomplete.
+arm-none-eabi-size  acumulador_Gru.elf 
+   text	   data	    bss	    dec	    hex	filename
+  12064	     68	   1852	  13984	   36a0	acumulador_Gru.elf
+Finished building: default.size.stdout
+ 
 
-00:07:49 Build Failed. 4 errors, 2 warnings. (took 310ms)
+16:08:12 Build Finished. 0 errors, 0 warnings. (took 304ms)
 
