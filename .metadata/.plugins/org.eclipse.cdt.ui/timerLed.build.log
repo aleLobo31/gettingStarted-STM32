@@ -1,4 +1,4 @@
-16:08:18 **** Incremental Build of configuration Debug for project timerLed ****
+20:32:28 **** Build of configuration Debug for project timerLed ****
 make -j12 all 
 arm-none-eabi-size  timerLed.elf 
    text	   data	    bss	    dec	    hex	filename
@@ -6,5 +6,5 @@ arm-none-eabi-size  timerLed.elf
 Finished building: default.size.stdout
  
 
-16:08:18 Build Finished. 0 errors, 0 warnings. (took 406ms)
+20:32:28 Build Finished. 0 errors, 0 warnings. (took 314ms)
 

@@ -70,13 +70,13 @@ uint8_t bool = 1;
 
 Sensors_calibration_t sensors_calibration_write = {
 		.min_steering = 0x0002,
-		.max_steering = 0x0005,
+		.max_steering = 0x0031,
 		.steering_correction_factor = 0x00000001,
 		.min_damper_left = 0x0002,
-		.max_damper_left = 0x0005,
+		.max_damper_left = 0x0031,
 		.damper_left_correction_factor = 0x00000001,
-		.min_damper_right = 0x0002,
-		.max_damper_right = 0x0005,
+		.min_damper_right = 0x0012,
+		.max_damper_right = 0x0037,
 		.damper_right_correction_factor = 0x00000001
 };
 

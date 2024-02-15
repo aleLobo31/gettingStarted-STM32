@@ -139,13 +139,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	if(HAL_GPIO_ReadPin(GPIOB, C_Pin) == 0){
+	if(falling == 0 && HAL_GPIO_ReadPin(GPIOA, C_Pin) == GPIO_PIN_RESET){
 		key = adc1 - adc2;
 		HAL_TIM_Base_Start_IT(&htim14);
 		falling = 1;
 	}
 
-	if(falling == 1 && HAL_GPIO_ReadPin(GPIOB, C_Pin) != 0){
+	if(falling == 1 && HAL_GPIO_ReadPin(GPIOA, C_Pin) != GPIO_PIN_RESET){
 		HAL_TIM_Base_Stop_IT(&htim14);
 		falling = 0;
 
@@ -370,12 +370,11 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin : C_Pin */
   GPIO_InitStruct.Pin = C_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(C_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */

@@ -1,10 +1,10 @@
-16:08:12 **** Incremental Build of configuration Debug for project acumulador_Gru ****
+20:32:25 **** Build of configuration Debug for project acumulador_Gru ****
 make -j12 all 
 arm-none-eabi-size  acumulador_Gru.elf 
    text	   data	    bss	    dec	    hex	filename
-  12064	     68	   1852	  13984	   36a0	acumulador_Gru.elf
+  12044	     68	   1852	  13964	   368c	acumulador_Gru.elf
 Finished building: default.size.stdout
  
 
-16:08:12 Build Finished. 0 errors, 0 warnings. (took 304ms)
+20:32:26 Build Finished. 0 errors, 0 warnings. (took 417ms)
 
